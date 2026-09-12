@@ -36,6 +36,10 @@ jobs:
           fi
           sed -i '' 's/^CPUthermalSettings_PRIVATE_FRAMEWORKS = .*/CPUthermalSettings_PRIVATE_FRAMEWORKS =/' Makefile
           sed -i '' 's/^CPUthermalCC_PRIVATE_FRAMEWORKS = .*/CPUthermalCC_PRIVATE_FRAMEWORKS =/' Makefile
+          find layout -type d -exec chmod 755 {} \; 2>/dev/null || true
+          find layout -type f -exec chmod 644 {} \; 2>/dev/null || true
+          chmod 755 layout/DEBIAN/* 2>/dev/null || true
+          ls -la layout/DEBIAN
           grep -nE 'PRIVATE_FRAMEWORKS|TWCFLAGS|PTFLAGS|MitigationHook' Makefile
 
       - name: 编译
