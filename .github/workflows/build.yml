@@ -49,8 +49,21 @@ jobs:
           make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" > /tmp/build.log 2>&1
           rc=$?
           tail -60 /tmp/build.log
+          mkdir -p /tmp/pk && cp packages/*.deb /tmp/pk/ 2>/dev/null || true
           ls -la packages || true
           exit $rc
+
+      - name: 再编一版无根包（隐根 rootHide 用）
+        run: |
+          cd src
+          make clean > /dev/null 2>&1 || true
+          if make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless THEOS="$HOME/theos" ARCHS="arm64 arm64e" >> /tmp/build.log 2>&1; then
+            echo "ROOTLESS_OK" | tee -a /tmp/build.log
+          else
+            echo "ROOTLESS_FAILED" | tee -a /tmp/build.log
+          fi
+          cp packages/*.deb /tmp/pk/ 2>/dev/null || true
+          ls -la /tmp/pk || true
 
       - name: 日志发公网（方便远程诊断）
         id: diag
@@ -68,4 +81,5 @@ jobs:
           name: ${{ steps.diag.outputs.tag || 'CPUthermal-build' }}
           path: |
             src/packages/*.deb
+            /tmp/pk/*.deb
             /tmp/build.log
