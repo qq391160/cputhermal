@@ -1,43 +1,44 @@
 name: build
-on: [push, workflow_dispatch]
+on:
+  push:
+  workflow_dispatch:
+
 jobs:
-  b:
+  build:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: unpack
-        run: unzip -q src.zip -d src
-      - name: sanitize
+
+      - name: 解压源码
         run: |
-          cd src
-          echo '#define CTLOG(...) NSLog(__VA_ARGS__)' > quiet.h
-          sed -i '' "s#-include *[^ ]*quiet.h#-include $PWD/quiet.h#" Makefile
-          sed -i '' 's/^PTFLAGS = .*/PTFLAGS =/' Makefile
-          sed -i '' 's/-Werror//g' Makefile
-          sed -i '' 's/^TWCFLAGS = /TWCFLAGS = -w /' Makefile
-          grep -nE "PTFLAGS|TWCFLAGS|quiet.h" Makefile
-      - name: setup theos
+          rm -rf src
+          unzip -q src.zip -d src
+          ls -la src | head -40
+
+      - name: 安装 Theos
         run: |
-          git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos
-          brew install ldid || true
-          XCSDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          mkdir -p $HOME/theos/sdks
-          ln -sfn "$XCSDK" $HOME/theos/sdks/iPhoneOS16.5.sdk
-      - name: build
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          brew install ldid xz || true
+          mkdir -p "$HOME/theos/sdks"
+          ln -sfn "$(xcrun --sdk iphoneos --show-sdk-path)" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
+          ls -la "$HOME/theos/sdks"
+
+      - name: 编译
         run: |
           cd src
           set +e
-          make package FINALPACKAGE=1 THEOS=$HOME/theos ARCHS="arm64e" > /tmp/build.log 2>&1
+          make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" > /tmp/build.log 2>&1
           rc=$?
-          tail -100 /tmp/build.log
+          tail -80 /tmp/build.log
           {
-            echo "## 构建结果 rc=$rc"
+            echo "### 编译结果 rc=$rc"
             echo '```'
-            tail -100 /tmp/build.log
+            tail -60 /tmp/build.log
             echo '```'
-          } >> $GITHUB_STEP_SUMMARY
-          ls -la packages 2>/dev/null
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -la packages || true
           exit $rc
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
