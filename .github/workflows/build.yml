@@ -1,0 +1,21 @@
+name: build
+on: [push, workflow_dispatch]
+jobs:
+  b:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q src.zip -d src
+      - name: setup theos
+        run: |
+          git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos
+          git clone --depth 1 https://github.com/theos/sdks.git /tmp/sdks
+          mkdir -p $HOME/theos/sdks
+          cp -R /tmp/sdks/iPhoneOS16.5.sdk $HOME/theos/sdks/ 2>/dev/null || cp -R /tmp/sdks/iPhoneOS*.sdk $HOME/theos/sdks/
+          brew install ldid || true
+      - name: build
+        run: cd src && make package FINALPACKAGE=1 THEOS=$HOME/theos ARCHS="arm64 arm64e"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CPUthermal-deb
+          path: src/packages/*.deb
