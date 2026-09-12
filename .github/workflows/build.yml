@@ -12,14 +12,16 @@ jobs:
           cd src
           echo '#define CTLOG(...) NSLog(__VA_ARGS__)' > quiet.h
           sed -i '' "s#-include *[^ ]*quiet.h#-include $PWD/quiet.h#" Makefile
-          echo "--- Makefile 前 40 行 ---"; head -40 Makefile
+          head -40 Makefile
       - name: setup theos
         run: |
           git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos
-          git clone --depth 1 https://github.com/theos/sdks.git /tmp/sdks
-          mkdir -p $HOME/theos/sdks
-          cp -R /tmp/sdks/iPhoneOS16.5.sdk $HOME/theos/sdks/ 2>/dev/null || cp -R /tmp/sdks/iPhoneOS*.sdk $HOME/theos/sdks/
           brew install ldid || true
+          XCSDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "Xcode SDK = $XCSDK"
+          mkdir -p $HOME/theos/sdks
+          ln -sfn "$XCSDK" $HOME/theos/sdks/iPhoneOS16.5.sdk
+          ls -la $HOME/theos/sdks/
       - name: build
         run: |
           cd src
