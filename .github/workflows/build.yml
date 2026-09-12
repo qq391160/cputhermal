@@ -5,7 +5,14 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - run: unzip -q src.zip -d src
+      - name: unpack
+        run: unzip -q src.zip -d src
+      - name: sanitize
+        run: |
+          cd src
+          echo '#define CTLOG(...) NSLog(__VA_ARGS__)' > quiet.h
+          sed -i '' "s#-include *[^ ]*quiet.h#-include $PWD/quiet.h#" Makefile
+          echo "--- Makefile 前 40 行 ---"; head -40 Makefile
       - name: setup theos
         run: |
           git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos
@@ -14,8 +21,25 @@ jobs:
           cp -R /tmp/sdks/iPhoneOS16.5.sdk $HOME/theos/sdks/ 2>/dev/null || cp -R /tmp/sdks/iPhoneOS*.sdk $HOME/theos/sdks/
           brew install ldid || true
       - name: build
-        run: cd src && make package FINALPACKAGE=1 THEOS=$HOME/theos ARCHS="arm64 arm64e"
+        run: |
+          cd src
+          set +e
+          make package FINALPACKAGE=1 THEOS=$HOME/theos ARCHS="arm64 arm64e" > /tmp/build.log 2>&1
+          rc=$?
+          echo "===== rc=$rc ====="
+          tail -60 /tmp/build.log
+          {
+            echo "## 构建结果 rc=$rc"
+            echo '```'
+            tail -50 /tmp/build.log
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+          ls -la packages 2>/dev/null
+          exit $rc
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: CPUthermal-deb
-          path: src/packages/*.deb
+          name: CPUthermal-build
+          path: |
+            src/packages/*.deb
+            /tmp/build.log
