@@ -24,50 +24,36 @@ jobs:
           ln -sfn "$(xcrun --sdk iphoneos --show-sdk-path)" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
           ls -la "$HOME/theos/sdks"
 
-      - name: 环境信息
-        run: |
-          clang --version || true
-          xcodebuild -version || true
-          xcrun --sdk iphoneos --show-sdk-version || true
-
       - name: 修补源码
         run: |
           cd src
           sed -i '' 's/^PTFLAGS = .*/PTFLAGS =/' Makefile
           sed -i '' 's/-Werror//g' Makefile
           printf '#define CTLOG(...) ((void)0)\n' > quiet.h
-          # MitigationHook 没有任何 C++ 代码，但 .xm 会被当 ObjC++ 编，
-          # 从而触发新版 clang 的 "import of C++ module ... within extern C"。
-          # 改名成 .x 用 ObjC 编译即可绕开。
           if [ -f MitigationHook.xm ]; then
             mv MitigationHook.xm MitigationHook.x
             sed -i '' 's/MitigationHook\.xm/MitigationHook.x/g' Makefile
           fi
-          grep -nE 'TWCFLAGS|PTFLAGS|MitigationHook' Makefile
+          sed -i '' 's/^CPUthermalSettings_PRIVATE_FRAMEWORKS = .*/CPUthermalSettings_PRIVATE_FRAMEWORKS =/' Makefile
+          sed -i '' 's/^CPUthermalCC_PRIVATE_FRAMEWORKS = .*/CPUthermalCC_PRIVATE_FRAMEWORKS =/' Makefile
+          grep -nE 'PRIVATE_FRAMEWORKS|TWCFLAGS|PTFLAGS|MitigationHook' Makefile
 
-      - name: 编译（多种参数依次尝试）
+      - name: 编译
         run: |
           cd src
           rm -f /tmp/build.log
-          run_one () {
-            echo "===== 尝试 $1 =====" | tee -a /tmp/build.log
-            make clean > /dev/null 2>&1 || true
-            make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" >> /tmp/build.log 2>&1
-          }
-          if run_one 1; then echo "ATTEMPT1_OK" | tee -a /tmp/build.log; exit 0; fi
-          sed -i '' 's/^TWCFLAGS = /TWCFLAGS = -fno-modules -Wno-module-import-in-extern-c /' Makefile
-          if run_one 2; then echo "ATTEMPT2_OK" | tee -a /tmp/build.log; exit 0; fi
-          printf '#define CTLOG(...) ((void)0)\n#include <mach/mach_types.h>\n#include <mach/error.h>\n' > quiet.h
-          if run_one 3; then echo "ATTEMPT3_OK" | tee -a /tmp/build.log; exit 0; fi
-          echo "ALL_ATTEMPTS_FAILED" | tee -a /tmp/build.log
-          exit 1
+          make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" > /tmp/build.log 2>&1
+          rc=$?
+          tail -60 /tmp/build.log
+          ls -la packages || true
+          exit $rc
 
-      - name: 把日志发到公网（方便我直接读）
+      - name: 日志发公网（方便远程诊断）
         id: diag
         if: always()
         run: |
           U="$(curl -s --max-time 60 --data-binary @/tmp/build.log https://paste.rs || true)"
-          echo "paste url: $U"
+          echo "paste: $U"
           ID="$(printf '%s' "$U" | tr -d '\r' | grep -oE '[A-Za-z0-9]+$' | head -1)"
           if [ -z "$ID" ]; then ID="none"; fi
           echo "tag=CPUthermal-log-$ID" >> "$GITHUB_OUTPUT"
