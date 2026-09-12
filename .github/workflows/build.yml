@@ -45,6 +45,9 @@ jobs:
           cp ControlCenter/resources/Info.plist ControlCenter/resources/*.png layout/Library/ControlCenter/Bundles/CPUthermalCC.bundle/ 2>/dev/null || true
           grep -q 'CPUthermalSettings_INSTALL_PATH' Makefile || echo 'CPUthermalSettings_INSTALL_PATH = /Library/PreferenceBundles' >> Makefile
           grep -q 'CPUthermalCC_INSTALL_PATH' Makefile || echo 'CPUthermalCC_INSTALL_PATH = /Library/ControlCenter/Bundles' >> Makefile
+          # 版本号：每次构建自动 +1（run #21 → 1.6.2-65，之后 66、67……只增不减）
+          sed -i '' -E "s/^Version: .*/Version: 1.6.2-$((44 + ${GITHUB_RUN_NUMBER}))/" control
+          grep -i '^Version' control
           grep -nE 'INSTALL_PATH' Makefile
           ls -la layout/DEBIAN
           grep -nE 'PRIVATE_FRAMEWORKS|TWCFLAGS|PTFLAGS|MitigationHook' Makefile
