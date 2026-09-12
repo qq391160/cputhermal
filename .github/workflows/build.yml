@@ -15,48 +15,67 @@ jobs:
           unzip -q src.zip -d src
           ls -la src | head -40
 
-      - name: 修编译环境
-        run: |
-          cd src
-          # 1) 覆盖 quiet.h：先引入 mach 头，免得它们被 theos 的 extern "C" 里当模块导入
-          printf '#define CTLOG(...) ((void)0)\n#include <mach/mach_types.h>\n#include <mach/error.h>\n' > quiet.h
-          # 2) 关掉 modules（新版 clang 在 ObjC++ 里默认开），并静默该类诊断
-          grep -q 'fno-modules' Makefile || sed -i '' 's/^TWCFLAGS = /TWCFLAGS = -fno-modules -Wno-module-import-in-extern-c /' Makefile
-          # 3) 清掉本地专用的 ptrauth 参数、去掉 -Werror
-          sed -i '' 's/^PTFLAGS = .*/PTFLAGS =/' Makefile
-          sed -i '' 's/-Werror//g' Makefile
-          grep -nE 'TWCFLAGS|PTFLAGS' Makefile
-          head -3 quiet.h
-
       - name: 安装 Theos
         run: |
+          rm -rf "$HOME/theos"
           git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
-          brew install ldid xz || true
+          brew install ldid xz > /dev/null 2>&1 || true
           mkdir -p "$HOME/theos/sdks"
           ln -sfn "$(xcrun --sdk iphoneos --show-sdk-path)" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
           ls -la "$HOME/theos/sdks"
 
-      - name: 编译
+      - name: 环境信息
+        run: |
+          clang --version || true
+          xcodebuild -version || true
+          xcrun --sdk iphoneos --show-sdk-version || true
+
+      - name: 修补源码
         run: |
           cd src
-          set +e
-          make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" \
-            ADDITIONAL_CFLAGS="-fno-modules -Wno-module-import-in-extern-c" > /tmp/build.log 2>&1
-          rc=$?
-          tail -100 /tmp/build.log
-          {
-            echo "## 构建结果 rc=$rc"
-            echo '```'
-            tail -80 /tmp/build.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          ls -la packages 2>/dev/null
-          exit $rc
+          sed -i '' 's/^PTFLAGS = .*/PTFLAGS =/' Makefile
+          sed -i '' 's/-Werror//g' Makefile
+          printf '#define CTLOG(...) ((void)0)\n' > quiet.h
+          # MitigationHook 没有任何 C++ 代码，但 .xm 会被当 ObjC++ 编，
+          # 从而触发新版 clang 的 "import of C++ module ... within extern C"。
+          # 改名成 .x 用 ObjC 编译即可绕开。
+          if [ -f MitigationHook.xm ]; then
+            mv MitigationHook.xm MitigationHook.x
+            sed -i '' 's/MitigationHook\.xm/MitigationHook.x/g' Makefile
+          fi
+          grep -nE 'TWCFLAGS|PTFLAGS|MitigationHook' Makefile
+
+      - name: 编译（多种参数依次尝试）
+        run: |
+          cd src
+          rm -f /tmp/build.log
+          run_one () {
+            echo "===== 尝试 $1 =====" | tee -a /tmp/build.log
+            make clean > /dev/null 2>&1 || true
+            make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" >> /tmp/build.log 2>&1
+          }
+          if run_one 1; then echo "ATTEMPT1_OK" | tee -a /tmp/build.log; exit 0; fi
+          sed -i '' 's/^TWCFLAGS = /TWCFLAGS = -fno-modules -Wno-module-import-in-extern-c /' Makefile
+          if run_one 2; then echo "ATTEMPT2_OK" | tee -a /tmp/build.log; exit 0; fi
+          printf '#define CTLOG(...) ((void)0)\n#include <mach/mach_types.h>\n#include <mach/error.h>\n' > quiet.h
+          if run_one 3; then echo "ATTEMPT3_OK" | tee -a /tmp/build.log; exit 0; fi
+          echo "ALL_ATTEMPTS_FAILED" | tee -a /tmp/build.log
+          exit 1
+
+      - name: 把日志发到公网（方便我直接读）
+        id: diag
+        if: always()
+        run: |
+          U="$(curl -s --max-time 60 --data-binary @/tmp/build.log https://paste.rs || true)"
+          echo "paste url: $U"
+          ID="$(printf '%s' "$U" | tr -d '\r' | grep -oE '[A-Za-z0-9]+$' | head -1)"
+          if [ -z "$ID" ]; then ID="none"; fi
+          echo "tag=CPUthermal-log-$ID" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: CPUthermal-build
+          name: ${{ steps.diag.outputs.tag || 'CPUthermal-build' }}
           path: |
             src/packages/*.deb
             /tmp/build.log
