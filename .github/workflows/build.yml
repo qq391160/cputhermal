@@ -39,6 +39,13 @@ jobs:
           find layout -type d -exec chmod 755 {} \; 2>/dev/null || true
           find layout -type f -exec chmod 644 {} \; 2>/dev/null || true
           chmod 755 layout/DEBIAN/* 2>/dev/null || true
+          mkdir -p layout/Library/PreferenceLoader/Preferences layout/Library/PreferenceBundles/CPUthermalSettings.bundle layout/Library/ControlCenter/Bundles/CPUthermalCC.bundle
+          cp Settings/entry.plist layout/Library/PreferenceLoader/Preferences/CPUthermalSettings.plist
+          cp Settings/Info.plist Settings/Root.plist Settings/icon*.png layout/Library/PreferenceBundles/CPUthermalSettings.bundle/ 2>/dev/null || true
+          cp ControlCenter/resources/Info.plist ControlCenter/resources/*.png layout/Library/ControlCenter/Bundles/CPUthermalCC.bundle/ 2>/dev/null || true
+          grep -q 'CPUthermalSettings_INSTALL_PATH' Makefile || echo 'CPUthermalSettings_INSTALL_PATH = /Library/PreferenceBundles' >> Makefile
+          grep -q 'CPUthermalCC_INSTALL_PATH' Makefile || echo 'CPUthermalCC_INSTALL_PATH = /Library/ControlCenter/Bundles' >> Makefile
+          grep -nE 'INSTALL_PATH' Makefile
           ls -la layout/DEBIAN
           grep -nE 'PRIVATE_FRAMEWORKS|TWCFLAGS|PTFLAGS|MitigationHook' Makefile
 
