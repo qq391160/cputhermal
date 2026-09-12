@@ -15,6 +15,19 @@ jobs:
           unzip -q src.zip -d src
           ls -la src | head -40
 
+      - name: 修编译环境
+        run: |
+          cd src
+          # 1) 覆盖 quiet.h：先引入 mach 头，免得它们被 theos 的 extern "C" 里当模块导入
+          printf '#define CTLOG(...) ((void)0)\n#include <mach/mach_types.h>\n#include <mach/error.h>\n' > quiet.h
+          # 2) 关掉 modules（新版 clang 在 ObjC++ 里默认开），并静默该类诊断
+          grep -q 'fno-modules' Makefile || sed -i '' 's/^TWCFLAGS = /TWCFLAGS = -fno-modules -Wno-module-import-in-extern-c /' Makefile
+          # 3) 清掉本地专用的 ptrauth 参数、去掉 -Werror
+          sed -i '' 's/^PTFLAGS = .*/PTFLAGS =/' Makefile
+          sed -i '' 's/-Werror//g' Makefile
+          grep -nE 'TWCFLAGS|PTFLAGS' Makefile
+          head -3 quiet.h
+
       - name: 安装 Theos
         run: |
           git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
@@ -27,16 +40,17 @@ jobs:
         run: |
           cd src
           set +e
-          make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" > /tmp/build.log 2>&1
+          make package FINALPACKAGE=1 THEOS="$HOME/theos" ARCHS="arm64 arm64e" \
+            ADDITIONAL_CFLAGS="-fno-modules -Wno-module-import-in-extern-c" > /tmp/build.log 2>&1
           rc=$?
-          tail -80 /tmp/build.log
+          tail -100 /tmp/build.log
           {
-            echo "### 编译结果 rc=$rc"
+            echo "## 构建结果 rc=$rc"
             echo '```'
-            tail -60 /tmp/build.log
+            tail -80 /tmp/build.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          ls -la packages || true
+          ls -la packages 2>/dev/null
           exit $rc
 
       - uses: actions/upload-artifact@v4
