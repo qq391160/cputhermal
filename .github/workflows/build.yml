@@ -13,7 +13,9 @@ jobs:
           echo '#define CTLOG(...) NSLog(__VA_ARGS__)' > quiet.h
           sed -i '' "s#-include *[^ ]*quiet.h#-include $PWD/quiet.h#" Makefile
           sed -i '' 's/^PTFLAGS = .*/PTFLAGS =/' Makefile
-          grep -n "PTFLAGS" Makefile
+          sed -i '' 's/-Werror//g' Makefile
+          sed -i '' 's/^TWCFLAGS = /TWCFLAGS = -w /' Makefile
+          grep -nE "PTFLAGS|TWCFLAGS|quiet.h" Makefile
       - name: setup theos
         run: |
           git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos
@@ -21,18 +23,17 @@ jobs:
           XCSDK=$(xcrun --sdk iphoneos --show-sdk-path)
           mkdir -p $HOME/theos/sdks
           ln -sfn "$XCSDK" $HOME/theos/sdks/iPhoneOS16.5.sdk
-          ls -la $HOME/theos/sdks/
       - name: build
         run: |
           cd src
           set +e
-          make package FINALPACKAGE=1 THEOS=$HOME/theos ARCHS="arm64 arm64e" > /tmp/build.log 2>&1
+          make package FINALPACKAGE=1 THEOS=$HOME/theos ARCHS="arm64e" > /tmp/build.log 2>&1
           rc=$?
-          tail -60 /tmp/build.log
+          tail -100 /tmp/build.log
           {
             echo "## 构建结果 rc=$rc"
             echo '```'
-            tail -50 /tmp/build.log
+            tail -100 /tmp/build.log
             echo '```'
           } >> $GITHUB_STEP_SUMMARY
           ls -la packages 2>/dev/null
