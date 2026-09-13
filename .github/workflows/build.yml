@@ -29,6 +29,12 @@ jobs:
           cd src
           sed -i '' 's/^PTFLAGS = .*/PTFLAGS =/' Makefile
           sed -i '' 's/-Werror//g' Makefile
+          # 让"未使用变量/函数"这类无害警告不再中断构建（theos 默认带 -Werror）
+          printf 'ADDITIONAL_CFLAGS += -Wno-error\nADDITIONAL_OBJCFLAGS += -Wno-error\nADDITIONAL_OBJCFLAGS += -Wno-error=unused-variable -Wno-error=unused-function\n' >> Makefile
+          # 记录源码指纹（方便确认这次编译的是哪份源码）
+          FP=$(cat Tweak.x RefreshRate.xm Settings/Root.plist 2>/dev/null | shasum | cut -c1-6)
+          echo "SOURCE_FP=$FP" >> "$GITHUB_ENV"
+          echo "源码指纹 SOURCE_FP=$FP"
           printf '#define CTLOG(...) ((void)0)\n' > quiet.h
           if [ -f MitigationHook.xm ]; then
             mv MitigationHook.xm MitigationHook.x
@@ -83,7 +89,7 @@ jobs:
           echo "paste: $U"
           ID="$(printf '%s' "$U" | tr -d '\r' | grep -oE '[A-Za-z0-9]+$' | head -1)"
           if [ -z "$ID" ]; then ID="none"; fi
-          echo "tag=CPUthermal-log-$ID" >> "$GITHUB_OUTPUT"
+          echo "tag=CPUthermal-${SOURCE_FP}-log-$ID" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         if: always()
