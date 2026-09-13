@@ -12,7 +12,9 @@ jobs:
       - name: 解压源码
         run: |
           rm -rf src
-          unzip -q src.zip -d src
+          ZIP=$(ls -t src*.zip 2>/dev/null | head -1)
+          echo "使用源码包: $ZIP"
+          unzip -q "$ZIP" -d src
           ls -la src | head -40
 
       - name: 安装 Theos
