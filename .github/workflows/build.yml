@@ -12,7 +12,8 @@ jobs:
       - name: 解压源码
         run: |
           rm -rf src
-          ZIP=$(ls src-*.zip 2>/dev/null | head -1)
+          ZIP=$(ls src-latest.zip 2>/dev/null | head -1)
+          [ -z "$ZIP" ] && ZIP=$(ls src-*.zip 2>/dev/null | head -1)
           [ -z "$ZIP" ] && ZIP=$(ls src*.zip 2>/dev/null | head -1)
           echo "使用源码包: $ZIP"
           unzip -q "$ZIP" -d src
