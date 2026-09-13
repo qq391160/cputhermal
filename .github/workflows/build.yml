@@ -36,7 +36,7 @@ jobs:
           # 让"未使用变量/函数"这类无害警告不再中断构建（theos 默认带 -Werror）
           printf 'ADDITIONAL_CFLAGS += -Wno-error\nADDITIONAL_OBJCFLAGS += -Wno-error\nADDITIONAL_OBJCFLAGS += -Wno-error=unused-variable -Wno-error=unused-function\n' >> Makefile
           # 记录源码指纹（方便确认这次编译的是哪份源码）
-          FP=$(cat Tweak.x RefreshRate.xm Settings/Root.plist 2>/dev/null | shasum | cut -c1-6)
+          FP=$(find . -path ./.git -prune -o -type f \( -name '*.m' -o -name '*.x' -o -name '*.xm' -o -name '*.plist' -o -name '*.h' \) -print | sort | xargs cat | shasum | cut -c1-6)
           echo "SOURCE_FP=$FP" >> "$GITHUB_ENV"
           echo "源码指纹 SOURCE_FP=$FP"
           printf '#define CTLOG(...) ((void)0)\n' > quiet.h
